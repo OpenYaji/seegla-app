@@ -35,10 +35,10 @@ module.exports = {
         // Direct Seegla brand tokens (for explicit usage)
         seegla: {
           navy:       '#0A2E5C',
-          teal:       '#16A085',
+          teal:       '#00CAC8',
           green:      '#4CAF7A',
           orange:     '#F59E0B',
-          background: '#F7F9FC',
+          background: '#F8F8FF',
           purple:     '#6C4DD9',
         },
       },

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ScrollView, View, Pressable } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Trophy, Users, Zap } from 'lucide-react-native';
@@ -8,24 +8,34 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Text } from '@/components/ui/text';
 import { COLORS } from '@/lib/constants';
-import { CHALLENGES, type Challenge } from '@/lib/data/static';
+import {
+  listChallengesByType,
+  setChallengeJoinState,
+  type ChallengeDto,
+} from '@/src/features/challenges/api/challenges.api';
 
 type TabKey = 'daily' | 'weekly' | 'team';
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'daily',  label: 'Daily'  },
+  { key: 'daily', label: 'Daily' },
   { key: 'weekly', label: 'Weekly' },
-  { key: 'team',   label: 'Team'   },
+  { key: 'team', label: 'Team' },
 ];
 
-function ChallengeCard({ challenge, isLast }: { challenge: Challenge; isLast: boolean }) {
-  const [joined, setJoined] = useState(challenge.joined);
+function ChallengeCard({
+  challenge,
+  isLast,
+  onToggle,
+}: {
+  challenge: ChallengeDto;
+  isLast: boolean;
+  onToggle: (id: string, joined: boolean) => void;
+}) {
   const iconColor = challenge.type === 'team' ? COLORS.teal : COLORS.green;
 
   return (
     <View className={`px-5 py-4 bg-background ${isLast ? '' : 'border-b border-border'}`}>
       <View className="flex-row items-start gap-3">
-        {/* Icon */}
         <View className="w-10 h-10 rounded-lg bg-primary/10 items-center justify-center shrink-0">
           {challenge.type === 'team'
             ? <Users size={20} color={iconColor} />
@@ -52,7 +62,7 @@ function ChallengeCard({ challenge, isLast }: { challenge: Challenge; isLast: bo
         </View>
       </View>
 
-      {joined && challenge.progress > 0 && (
+      {challenge.joined && challenge.progress > 0 && (
         <View className="mt-3 ml-13">
           <View className="flex-row justify-between mb-1">
             <Text variant="muted" className="text-xs">Progress</Text>
@@ -68,12 +78,12 @@ function ChallengeCard({ challenge, isLast }: { challenge: Challenge; isLast: bo
 
       <View className="mt-3">
         <Button
-          variant={joined ? 'outline' : 'default'}
+          variant={challenge.joined ? 'outline' : 'default'}
           size="sm"
           className="rounded-lg"
-          onPress={() => setJoined((j) => !j)}
+          onPress={() => onToggle(challenge.id, !challenge.joined)}
         >
-          <Text>{joined ? 'Joined ✓' : 'Join Challenge'}</Text>
+          <Text>{challenge.joined ? 'Joined ✓' : 'Join Challenge'}</Text>
         </Button>
       </View>
     </View>
@@ -82,18 +92,50 @@ function ChallengeCard({ challenge, isLast }: { challenge: Challenge; isLast: bo
 
 export default function ChallengesScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('daily');
-  const filtered = CHALLENGES.filter((c) => c.type === activeTab);
+  const [challenges, setChallenges] = useState<ChallengeDto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const res = await listChallengesByType(activeTab);
+        if (!active) return;
+        setChallenges(res.data);
+      } catch {
+        if (!active) return;
+        setChallenges([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [activeTab]);
+
+  const handleToggle = async (challengeId: string, shouldJoin: boolean) => {
+    const prev = challenges;
+    setChallenges((curr) => curr.map((c) => (
+      c.id === challengeId ? { ...c, joined: shouldJoin, progress: shouldJoin ? c.progress : 0 } : c
+    )));
+
+    const res = await setChallengeJoinState(challengeId, shouldJoin);
+    if (res.error) {
+      setChallenges(prev);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background">
       <StatusBar style="dark" />
-      {/* Header */}
       <View className="px-5 pt-4 pb-4 border-b border-border">
         <Text className="text-foreground text-2xl font-bold">Challenges</Text>
         <Text variant="muted" className="text-sm mt-0.5">Stay active, earn points</Text>
       </View>
 
-      {/* Underline tab bar — full width, flush */}
       <View className="flex-row border-b border-border">
         {TABS.map((tab) => (
           <Pressable
@@ -115,7 +157,7 @@ export default function ChallengesScreen() {
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {filtered.length === 0 ? (
+        {!loading && challenges.length === 0 ? (
           <View className="items-center justify-center py-16 px-8">
             <Zap size={40} color="#D1D5DB" />
             <Text variant="muted" className="text-center mt-3">
@@ -123,11 +165,12 @@ export default function ChallengesScreen() {
             </Text>
           </View>
         ) : (
-          filtered.map((challenge, i) => (
+          challenges.map((challenge, i) => (
             <ChallengeCard
               key={challenge.id}
               challenge={challenge}
-              isLast={i === filtered.length - 1}
+              isLast={i === challenges.length - 1}
+              onToggle={handleToggle}
             />
           ))
         )}
@@ -136,3 +179,4 @@ export default function ChallengesScreen() {
     </SafeAreaView>
   );
 }
+

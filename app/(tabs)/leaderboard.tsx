@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ScrollView, View, Pressable } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Medal } from 'lucide-react-native';
@@ -7,21 +7,21 @@ import { Medal } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { COLORS } from '@/lib/constants';
 import {
-  CURRENT_USER,
-  LEADERBOARD_INDIVIDUAL,
-  LEADERBOARD_DEPARTMENT,
-  type LeaderboardEntry,
-} from '@/lib/data/static';
+  getDepartmentLeaderboard,
+  getIndividualLeaderboard,
+  type LeaderboardEntryDto,
+} from '@/src/features/leaderboard/api/leaderboard.api';
+import { getCurrentUserProfile } from '@/src/features/auth/api/profile.api';
 
 type TabKey = 'individual' | 'department';
 
 const PODIUM_COLORS = ['text-seegla-orange', 'text-muted-foreground', 'text-amber-700'];
-const MEDAL_COLORS  = [COLORS.orange, '#9CA3AF', '#B45309'];
+const MEDAL_COLORS = [COLORS.orange, '#9CA3AF', '#B45309'];
 
-function PodiumCard({ entry, position }: { entry: LeaderboardEntry; position: 0 | 1 | 2 }) {
-  const sizes  = ['w-20 h-20', 'w-16 h-16', 'w-14 h-14'];
+function PodiumCard({ entry, position }: { entry: LeaderboardEntryDto; position: 0 | 1 | 2 }) {
+  const sizes = ['w-20 h-20', 'w-16 h-16', 'w-14 h-14'];
   const orders = ['order-2', 'order-1', 'order-3'];
-  const tops   = ['', 'mt-4', 'mt-8'];
+  const tops = ['', 'mt-4', 'mt-8'];
 
   return (
     <View className={`flex-1 items-center ${orders[position]} ${tops[position]}`}>
@@ -39,7 +39,7 @@ function PodiumCard({ entry, position }: { entry: LeaderboardEntry; position: 0 
   );
 }
 
-function RankRow({ entry }: { entry: LeaderboardEntry }) {
+function RankRow({ entry }: { entry: LeaderboardEntryDto }) {
   return (
     <View
       className={`flex-row items-center px-5 py-3 border-b border-border ${
@@ -74,22 +74,45 @@ function RankRow({ entry }: { entry: LeaderboardEntry }) {
 
 export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('individual');
-  const entries = activeTab === 'individual' ? LEADERBOARD_INDIVIDUAL : LEADERBOARD_DEPARTMENT;
-  const top3    = entries.slice(0, 3);
-  const rest    = entries.slice(3);
+  const [entries, setEntries] = useState<LeaderboardEntryDto[]>([]);
+  const [currentPoints, setCurrentPoints] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const [me, board] = await Promise.all([
+          getCurrentUserProfile(),
+          activeTab === 'individual' ? getIndividualLeaderboard() : getDepartmentLeaderboard(),
+        ]);
+        if (!active) return;
+        setEntries(board.data);
+        setCurrentPoints(me?.points ?? 0);
+      } catch {
+        if (!active) return;
+        setEntries([]);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [activeTab]);
+
+  const top3 = entries.slice(0, 3);
+  const rest = entries.slice(3);
+  const delta = Math.max(0, (entries[0]?.points ?? 0) - currentPoints);
 
   return (
     <SafeAreaView className="flex-1 bg-background">
       <StatusBar style="dark" />
-      {/* Header */}
       <View className="px-5 pt-4 pb-4 border-b border-border">
         <Text className="text-foreground text-2xl font-bold">Leaderboard</Text>
         <Text variant="muted" className="text-sm mt-0.5">
-          Your team is {(entries[0]?.points - CURRENT_USER.points).toLocaleString()} pts ahead, let's catch up!
+          Your team is {delta.toLocaleString()} pts ahead, let's catch up!
         </Text>
       </View>
 
-      {/* Underline tab bar — full width, flush */}
       <View className="flex-row border-b border-border">
         {(['individual', 'department'] as TabKey[]).map((tab) => (
           <Pressable
@@ -111,29 +134,32 @@ export default function LeaderboardScreen() {
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-
-        {/* Podium — full-bleed navy */}
         <View className="bg-seegla-navy pt-6 pb-5 px-5">
           <Text className="text-white/50 text-xs text-center uppercase tracking-widest mb-4">
             Top Performers
           </Text>
           <View className="flex-row items-end justify-center gap-2">
             {top3.map((entry, i) => (
-              <PodiumCard key={entry.rank} entry={entry} position={i as 0 | 1 | 2} />
+              <PodiumCard key={`${entry.rank}-${entry.name}`} entry={entry} position={i as 0 | 1 | 2} />
             ))}
           </View>
         </View>
 
-        {/* Section gutter */}
         <View className="h-2 bg-muted" />
 
-        {/* Ranked list — full-bleed rows */}
         {rest.map((entry) => (
-          <RankRow key={entry.rank} entry={entry} />
+          <RankRow key={`${entry.rank}-${entry.name}`} entry={entry} />
         ))}
+
+        {entries.length === 0 ? (
+          <View className="px-5 py-8">
+            <Text variant="muted">No leaderboard data yet.</Text>
+          </View>
+        ) : null}
 
         <View className="h-8" />
       </ScrollView>
     </SafeAreaView>
   );
 }
+

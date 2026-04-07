@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
+  PermissionsAndroid,
   Platform,
   Pressable,
   ScrollView,
@@ -10,12 +12,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Mail, QrCode, ChevronLeft, CheckCircle2, User, Activity } from 'lucide-react-native';
+import { Mail, QrCode, ChevronLeft, CheckCircle2, User, Activity, Lock } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { COLORS } from '@/lib/constants';
+import { setAuthenticated } from '@/src/features/auth/hooks/use-auth-gate';
+import { supabase } from '@/src/app-config/supabase';
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
@@ -48,7 +52,9 @@ type Step = 'login' | 'success' | 'profile' | 'health';
 export default function LoginScreen() {
   const [step, setStep]       = useState<Step>('login');
   const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [finishingLogin, setFinishingLogin] = useState(false);
 
   // Profile fields
   const [name, setName]                   = useState('');
@@ -57,6 +63,7 @@ export default function LoginScreen() {
   const [interests, setInterests]         = useState<string[]>([]);
 
   const isValidEmail  = email.includes('@') && email.includes('.');
+  const canAttemptLogin = isValidEmail && password.length >= 6;
   const canSaveProfile = name.trim().length > 0 && department.length > 0;
 
   // Auto-fill name hint from email
@@ -79,13 +86,102 @@ export default function LoginScreen() {
     );
   }
 
-  function handleVerify() {
+  async function handleVerify() {
+    if (!canAttemptLogin) return;
     setLoading(true);
-    setTimeout(() => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (error) {
       setLoading(false);
+      Alert.alert('Login failed', 'Email or password is incorrect.');
+      return;
+    }
+
+    const userId = data.user?.id;
+    if (userId) {
+      const profileRes = await supabase
+        .from('profiles')
+        .select('onboarding_completed, full_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const alreadyOnboarded = Boolean(profileRes.data?.onboarding_completed);
+      if (alreadyOnboarded) {
+        await setAuthenticated(true);
+        setLoading(false);
+        Alert.alert('Welcome back', 'Signed in successfully.');
+        router.replace('/(tabs)');
+        return;
+      }
+
+      if (profileRes.data?.full_name) {
+        setName(profileRes.data.full_name);
+      } else {
+        setName(extractNameFromEmail(email));
+      }
+    } else {
       setName(extractNameFromEmail(email));
-      setStep('success');
-    }, 800);
+    }
+
+    setLoading(false);
+    setStep('success');
+  }
+
+  async function completeLogin() {
+    if (finishingLogin) return;
+    setFinishingLogin(true);
+    try {
+      await setAuthenticated(true);
+      router.replace('/(tabs)');
+    } finally {
+      setFinishingLogin(false);
+    }
+  }
+
+  async function askStepPermission(): Promise<boolean> {
+    if (Platform.OS === 'android') {
+      try {
+        const sdk = typeof Platform.Version === 'number' ? Platform.Version : 0;
+        if (sdk >= 29) {
+          const result = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION,
+            {
+              title: 'Allow step tracking',
+              message: 'SEEGLA needs activity permission to read your steps and award points.',
+              buttonPositive: 'Allow',
+              buttonNegative: 'Not now',
+            },
+          );
+          return result === PermissionsAndroid.RESULTS.GRANTED;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        'Step Tracking Permission',
+        'Allow SEEGLA to access your activity data to record steps?',
+        [
+          { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Allow', onPress: () => resolve(true) },
+        ],
+      );
+    });
+  }
+
+  async function handleConnectHealth() {
+    const granted = await askStepPermission();
+    if (!granted) {
+      Alert.alert('Permission required', 'You can continue with "Skip for now" and enable step tracking later.');
+      return;
+    }
+    await completeLogin();
   }
 
   // ── STEP: Login ──────────────────────────────────────────────────────────────
@@ -100,7 +196,7 @@ export default function LoginScreen() {
           {/* Back */}
           <View className="px-5 pt-2">
             <View className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center">
-              <ChevronLeft size={20} color={COLORS.navy} onPress={() => router.back()} />
+              <ChevronLeft size={20} color={COLORS.navy} onPress={() => router.replace('/(auth)/onboarding')} />
             </View>
           </View>
 
@@ -141,14 +237,32 @@ export default function LoginScreen() {
               </Text>
             </View>
 
+            {/* Password input */}
+            <View className="gap-2">
+              <Text className="text-foreground text-sm font-medium">Password</Text>
+              <View className="flex-row items-center bg-card border border-border rounded-xl px-4 gap-3">
+                <Lock size={18} color={COLORS.teal} />
+                <TextInput
+                  className="flex-1 py-4 text-sm text-foreground"
+                  placeholder="Enter password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+              </View>
+            </View>
+
             {/* Continue */}
             <Button
               size="lg"
               className="rounded-full"
-              disabled={!isValidEmail || loading}
+              disabled={!canAttemptLogin || loading}
               onPress={handleVerify}
             >
-              <Text>{loading ? 'Verifying...' : 'Continue with Email'}</Text>
+              <Text>{loading ? 'Signing in...' : 'Sign in'}</Text>
             </Button>
 
             {/* Divider */}
@@ -159,7 +273,13 @@ export default function LoginScreen() {
             </View>
 
             {/* QR option */}
-            <Button variant="outline" size="lg" className="rounded-full" onPress={handleVerify}>
+            <Button
+              variant="outline"
+              size="lg"
+              className="rounded-full"
+              disabled={!canAttemptLogin || loading}
+              onPress={handleVerify}
+            >
               <QrCode size={18} color={COLORS.navy} />
               <Text>Join via QR Code</Text>
             </Button>
@@ -391,7 +511,7 @@ export default function LoginScreen() {
             <Pressable
               key={p.id}
               className="flex-row items-center justify-between bg-card border border-border rounded-2xl px-5 py-4"
-              onPress={() => router.replace('/(tabs)')}
+              onPress={handleConnectHealth}
             >
               <View className="flex-row items-center gap-4">
                 <View className={`w-11 h-11 rounded-full ${p.colorClass} items-center justify-center`}>
@@ -422,9 +542,11 @@ export default function LoginScreen() {
         {/* Skip */}
         <Pressable
           className="items-center py-4 mb-2"
-          onPress={() => router.replace('/(tabs)')}
+          onPress={completeLogin}
         >
-          <Text variant="muted" className="text-sm">Skip for now</Text>
+          <Text variant="muted" className="text-sm">
+            {finishingLogin ? 'Signing in...' : 'Skip for now'}
+          </Text>
         </Pressable>
 
       </Animated.View>

@@ -274,6 +274,7 @@ export interface Story {
   user_id:    string;
   company_id: string;
   media_url:  string;
+  caption:    string | null;
   expires_at: string;
   view_count: number;
   created_at: string;
@@ -358,7 +359,7 @@ export interface Database {
       redemptions:                  { Row: Redemption;                 Insert: Omit<Redemption, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Redemption>; };
       feed_posts:                   { Row: FeedPost;                   Insert: Omit<FeedPost, 'id' | 'like_count' | 'celebrate_count' | 'created_at'>; Update: Partial<FeedPost>; };
       feed_reactions:               { Row: FeedReaction;               Insert: Omit<FeedReaction, 'id' | 'created_at'>; Update: never; };
-      stories:                      { Row: Story;                      Insert: Omit<Story, 'id' | 'view_count' | 'created_at'>; Update: Partial<Story>; };
+      stories:                      { Row: Story;                      Insert: Omit<Story, 'id' | 'view_count' | 'created_at'> & Partial<Pick<Story, 'caption'>>; Update: Partial<Story>; };
       story_views:                  { Row: StoryView;                  Insert: StoryView; Update: never; };
       notification_log:             { Row: NotificationLog;            Insert: Omit<NotificationLog, 'id' | 'sent_at'>; Update: Partial<NotificationLog>; };
     };

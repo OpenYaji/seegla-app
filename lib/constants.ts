@@ -6,13 +6,13 @@
 
 export const COLORS = {
   /** 60% — Main app background */
-  background: '#F7F9FC',
+  background: '#F8F8FF',
 
   /** 25% — Brand anchor: headings, navigation, key numbers */
   navy: '#0A2E5C',
 
   /** 10% — Primary action buttons and engagement CTAs */
-  teal: '#16A085',
+  teal: '#00CAC8',
 
   /** 3% — Health outcomes and progress indicators */
   green: '#4CAF7A',
@@ -23,7 +23,7 @@ export const COLORS = {
   /** Decorative gradient: Purple → Teal → Amber */
   gradient: {
     purple: '#6C4DD9',
-    teal: '#16A085',
+    teal: '#00CAC8',
     amber: '#F59E0B',
   },
 

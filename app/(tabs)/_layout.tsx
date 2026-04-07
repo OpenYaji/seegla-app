@@ -1,21 +1,23 @@
-import { Pressable } from 'react-native';
-import { Tabs } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withSequence,
-} from 'react-native-reanimated';
-import { COLORS } from '@/lib/constants';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { COLORS } from '@/lib/constants';
+import * as Haptics from 'expo-haptics';
+import { Redirect, Tabs } from 'expo-router';
 import {
-  Home,
-  Users,
-  Trophy,
   BarChart2,
+  Home,
   ShoppingBag,
+  Trophy,
+  Users,
 } from 'lucide-react-native';
+import { Pressable } from 'react-native';
+import { Text, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+} from 'react-native-reanimated';
+import { useAuthGate } from '@/src/features/auth/hooks/use-auth-gate';
 
 // ─── Spring-animated tab button ───────────────────────────────────────────────
 
@@ -48,6 +50,19 @@ function AnimatedHapticTab({ children, onPress, style, ...rest }: any) {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { loading, isAuthenticated } = useAuthGate();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background }}>
+        <Text style={{ color: COLORS.navy, fontWeight: '600' }}>Checking session...</Text>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <Tabs
