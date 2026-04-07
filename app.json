@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "seegla-mobile",
+    "slug": "seegla-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/SEEGLA-LOGO-VARIATIONPRIMARY.png",
+    "scheme": "seeglamobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/SEEGLA-LOGO-VARIATIONICON.png",
+        "backgroundColor": "#0A2E5C"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/SEEGLA-LOGO-VARIATIONICON.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/SEEGLA-LOGO-VARIATIONPRIMARY.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F9FC",
+          "dark": {
+            "backgroundColor": "#0A2E5C"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

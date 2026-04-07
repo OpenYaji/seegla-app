@@ -1,0 +1,121 @@
+import { Pressable } from 'react-native';
+import { Tabs } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
+import { COLORS } from '@/lib/constants';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  Home,
+  Users,
+  Trophy,
+  BarChart2,
+  ShoppingBag,
+} from 'lucide-react-native';
+
+// ─── Spring-animated tab button ───────────────────────────────────────────────
+
+function AnimatedHapticTab({ children, onPress, style, ...rest }: any) {
+  const scale = useSharedValue(1);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  function handlePress(e: any) {
+    // Spring: compress → overshoot → settle
+    scale.value = withSequence(
+      withSpring(0.82, { damping: 22, stiffness: 600, mass: 0.8 }),
+      withSpring(1.08, { damping: 10, stiffness: 250, mass: 0.8 }),
+      withSpring(1.00, { damping: 14, stiffness: 300, mass: 0.8 }),
+    );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress?.(e);
+  }
+
+  return (
+    <Pressable style={style} onPress={handlePress} {...rest}>
+      <Animated.View style={animStyle}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
+// ─── Tab layout ───────────────────────────────────────────────────────────────
+
+export default function TabLayout() {
+  const colorScheme = useColorScheme();
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown:           false,
+        tabBarButton:          AnimatedHapticTab,
+        tabBarActiveTintColor: COLORS.teal,
+        tabBarInactiveTintColor: colorScheme === 'dark' ? COLORS.background : '#9CA3AF',
+        tabBarStyle: {
+          position:        'absolute',
+          bottom:          6,
+          left:            16,
+          right:           16,
+          borderRadius:    24,
+          height:          64,
+          paddingBottom:   8,
+          paddingTop:      8,
+          borderTopWidth:  0,
+          backgroundColor: colorScheme === 'dark' ? COLORS.navy : COLORS.white,
+          // iOS shadow
+          shadowColor:     '#000',
+          shadowOffset:    { width: 0, height: 6 },
+          shadowOpacity:   0.14,
+          shadowRadius:    18,
+          // Android
+          elevation: 14,
+        },
+        tabBarLabelStyle: {
+          fontSize:   11,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="feed"
+        options={{
+          title: 'Feed',
+          tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="challenges"
+        options={{
+          title: 'Challenges',
+          tabBarIcon: ({ color, size }) => <Trophy size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: 'Leaderboard',
+          tabBarIcon: ({ color, size }) => <BarChart2 size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="marketplace"
+        options={{
+          title: 'Rewards',
+          tabBarIcon: ({ color, size }) => <ShoppingBag size={size} color={color} />,
+        }}
+      />
+    </Tabs>
+  );
+}

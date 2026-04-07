@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Seegla Design System — 60/25/10/3/2 palette */
+    /* Values in HSL channel format (no hsl() wrapper) for NativeWind v4 compatibility */
+
+    --background:         217 33% 97%;   /* #F7F9FC  Light Gray  — 60% */
+    --foreground:         215 73% 20%;   /* #0A2E5C  Navy        — 25% */
+
+    --primary:            168 73% 36%;   /* #16A085  Teal        — 10% */
+    --primary-foreground: 0   0%  100%;
+
+    --secondary:          144 41% 55%;   /* #4CAF7A  Green       — 3%  */
+    --secondary-foreground: 0 0%  100%;
+
+    --accent:             37  91% 50%;   /* #F59E0B  Orange      — 2% (rewards only) */
+    --accent-foreground:  0   0%  100%;
+
+    --card:               0   0%  100%;
+    --card-foreground:    215 73% 20%;   /* Navy */
+
+    --muted:              217 33% 97%;   /* Light Gray */
+    --muted-foreground:   215 20% 50%;
+
+    --border:             214 32% 91%;
+    --input:              214 32% 91%;
+    --ring:               168 73% 36%;   /* Teal */
+
+    --radius: 0.5rem;
+  }
+}
