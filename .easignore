@@ -1,0 +1,15 @@
+# Keep EAS upload focused on runtime app files
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Local/dev agent folders (contain symlinks on Windows)
+.agents/
+.claude/
+AgenticWorkflow/
+.tmp/
+.vscode/
+
+# Local env files
+.env*.local

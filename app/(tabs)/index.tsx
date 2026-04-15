@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Dimensions, Modal, Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Dimensions, Modal, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
@@ -311,7 +311,10 @@ export default function HomeScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [waterLogged, setWaterLogged] = useState(0);
-  const [stepActionLoading, setStepActionLoading] = useState(false);
+  const [stepTrackingLoading, setStepTrackingLoading] = useState(false);
+  const lastSyncedStepsRef = useRef<number | null>(null);
+  const lastSyncedAtMsRef = useRef<number | null>(null);
+  const syncInFlightRef = useRef(false);
 
   const loadDashboard = async () => {
     try {
@@ -416,36 +419,136 @@ export default function HomeScreen() {
     }
   };
 
-  const handleRecordStep = async () => {
-    if (stepActionLoading) return;
-    setStepActionLoading(true);
-    const pedometerResult = await readTodayPedometerSteps();
-    if (pedometerResult.steps === null) {
-      if (pedometerResult.reason === 'MISSING_MODULE') {
-        Alert.alert('Pedometer unavailable', 'Install app dependencies again to enable device step sync.');
-      } else if (pedometerResult.reason === 'PERMISSION_DENIED') {
-        Alert.alert('Permission required', 'Allow Activity/Health permission to sync your steps.');
-      } else {
-        Alert.alert('Pedometer unavailable', 'This device does not support step counting.');
+  const syncPedometerTotal = async (totalStepsToday: number, nowMs: number, minStepDelta: number) => {
+    if (syncInFlightRef.current) return;
+    const roundedTotal = Math.max(0, Math.round(totalStepsToday));
+    const lastTotal = lastSyncedStepsRef.current;
+    const lastAt = lastSyncedAtMsRef.current;
+
+    if (lastTotal !== null) {
+      const deltaSteps = roundedTotal - lastTotal;
+      if (deltaSteps < minStepDelta) return;
+      if (deltaSteps <= 0) return;
+
+      if (lastAt !== null) {
+        const elapsedMinutes = Math.max((nowMs - lastAt) / 60000, 1 / 60);
+        const cadence = deltaSteps / elapsedMinutes;
+        // Human cadence rarely sustains over ~220 steps/min. Above this is usually non-walking vibration.
+        if (cadence > 220) return;
       }
-      setStepActionLoading(false);
-      return;
     }
-    const res = await syncPedometerSteps(pedometerResult.steps);
-    setStepActionLoading(false);
-    if (res.error === 'TRACKING_PAUSED') {
-      return;
+
+    syncInFlightRef.current = true;
+    let res: Awaited<ReturnType<typeof syncPedometerSteps>>;
+    try {
+      res = await syncPedometerSteps(roundedTotal);
+    } finally {
+      syncInFlightRef.current = false;
+    }
+
+    if (res.error === 'TRACKING_PAUSED') return;
+    if (res.error) return;
+
+    lastSyncedStepsRef.current = roundedTotal;
+    lastSyncedAtMsRef.current = nowMs;
+    await loadDashboard();
+  };
+
+  const startOfToday = () => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    return start;
+  };
+
+  useEffect(() => {
+    if (!dashboard || userData.stepTrackingPaused) return;
+
+    let stopped = false;
+    let subscription: { remove: () => void } | null = null;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let appStateSub: { remove: () => void } | null = null;
+    let baseline = 0;
+
+    const syncSnapshot = async (minStepDelta: number) => {
+      const pedometerResult = await readTodayPedometerSteps();
+      if (stopped || pedometerResult.steps === null) return;
+      baseline = pedometerResult.steps;
+      await syncPedometerTotal(baseline, Date.now(), minStepDelta);
+    };
+
+    const run = async () => {
+      const Sensors = require('expo-sensors');
+      const Pedometer = Sensors?.Pedometer;
+      if (!Pedometer) return;
+
+      const isAvailable = await Pedometer.isAvailableAsync();
+      if (!isAvailable) return;
+
+      const permission = await Pedometer.requestPermissionsAsync();
+      if (!permission?.granted) return;
+
+      const initial = await Pedometer.getStepCountAsync(startOfToday(), new Date());
+      if (stopped) return;
+      baseline = Math.max(0, Math.round(initial?.steps ?? 0));
+      await syncPedometerTotal(baseline, Date.now(), 1);
+
+      subscription = Pedometer.watchStepCount((event: { steps?: number }) => {
+        const eventSteps = Math.max(0, Math.round(event?.steps ?? 0));
+        const total = baseline + eventSteps;
+        void syncPedometerTotal(total, Date.now(), 15);
+      });
+
+      appStateSub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          void syncSnapshot(1);
+        }
+      });
+
+      timer = setInterval(() => {
+        void syncSnapshot(10);
+      }, 120000);
+    };
+
+    void run();
+
+    return () => {
+      stopped = true;
+      subscription?.remove();
+      appStateSub?.remove();
+      if (timer) clearInterval(timer);
+    };
+  }, [dashboard, userData.stepTrackingPaused]);
+
+  const handleToggleStepTracking = async () => {
+    if (stepTrackingLoading) return;
+    setStepTrackingLoading(true);
+    await setStepTrackingPaused(!userData.stepTrackingPaused);
+    setStepTrackingLoading(false);
+    if (userData.stepTrackingPaused) {
+      lastSyncedStepsRef.current = null;
+      lastSyncedAtMsRef.current = null;
+    } else {
+      syncInFlightRef.current = false;
     }
     await loadDashboard();
   };
 
-  const handleToggleStepTracking = async () => {
-    if (stepActionLoading) return;
-    setStepActionLoading(true);
-    await setStepTrackingPaused(!userData.stepTrackingPaused);
-    setStepActionLoading(false);
-    await loadDashboard();
-  };
+  useEffect(() => {
+    if (!userData.stepTrackingPaused) {
+      return;
+    }
+    lastSyncedStepsRef.current = null;
+    lastSyncedAtMsRef.current = null;
+    syncInFlightRef.current = false;
+  }, [userData.stepTrackingPaused]);
+
+  useEffect(() => {
+    if (!dashboard) {
+      return;
+    }
+    lastSyncedStepsRef.current = userData.dailyProgress.steps.current;
+    lastSyncedAtMsRef.current = Date.now();
+  }, [dashboard, userData.dailyProgress.steps.current]);
 
   useEffect(() => {
     setWaterLogged(userData.dailyProgress.water.current);
@@ -612,18 +715,10 @@ export default function HomeScreen() {
                 <View className="flex-row gap-2 mt-1">
                   <Button
                     size="sm"
-                    className="rounded-lg h-8 px-3"
-                    onPress={handleRecordStep}
-                    disabled={stepActionLoading || userData.stepTrackingPaused}
-                  >
-                    <Text className="text-xs">{stepActionLoading ? '...' : 'Sync Pedometer'}</Text>
-                  </Button>
-                  <Button
-                    size="sm"
                     variant={userData.stepTrackingPaused ? 'default' : 'outline'}
                     className="rounded-lg h-8 px-3"
                     onPress={handleToggleStepTracking}
-                    disabled={stepActionLoading}
+                    disabled={stepTrackingLoading}
                   >
                     <Text className="text-xs">{userData.stepTrackingPaused ? 'Resume' : 'Pause'}</Text>
                   </Button>

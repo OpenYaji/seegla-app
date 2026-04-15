@@ -17,7 +17,8 @@
         "backgroundColor": "#0A2E5C"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.devyaji.seeglamobile"
     },
     "web": {
       "bundler": "metro",
@@ -42,6 +43,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "59f24dfc-738b-4f61-b1e8-a6bd68e93c5b"
+      }
     }
   }
 }
