@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "SEEGLA",
+    "name": "Seegla",
     "slug": "seegla-mobile",
-    "version": "0.5.0",
+    "version": "0.5.6",
     "orientation": "portrait",
     "icon": "./assets/images/SEEGLA-LOGO-VARIATIONPRIMARY.png",
     "scheme": "seeglamobile",

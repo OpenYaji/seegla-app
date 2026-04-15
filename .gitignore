@@ -45,3 +45,10 @@ app-example
 
 #skills 
 .agents
+.claude
+/supabase
+/AgenticWorkflow
+PLAN.md
+CLAUDE.md
+.tmp
+skills-lock.json

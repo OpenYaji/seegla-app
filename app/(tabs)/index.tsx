@@ -311,6 +311,7 @@ export default function HomeScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [waterLogged, setWaterLogged] = useState(0);
+  const [liveStepCount, setLiveStepCount] = useState<number | null>(null);
   const [stepTrackingLoading, setStepTrackingLoading] = useState(false);
   const lastSyncedStepsRef = useRef<number | null>(null);
   const lastSyncedAtMsRef = useRef<number | null>(null);
@@ -375,7 +376,8 @@ export default function HomeScreen() {
 
   const checkedIn = userData.checkIn.completed;
   const level = getLevel(userData.points);
-  const stepsPercent = Math.round((userData.dailyProgress.steps.current / Math.max(1, userData.dailyProgress.steps.goal)) * 100);
+  const displayedSteps = Math.max(userData.dailyProgress.steps.current, liveStepCount ?? 0);
+  const stepsPercent = Math.round((displayedSteps / Math.max(1, userData.dailyProgress.steps.goal)) * 100);
   const weeklyCheckins = userData.weeklyActivity.filter((d) => d.checkedIn).length;
   const monthLabel = useMemo(() => {
     const d = new Date();
@@ -451,7 +453,8 @@ export default function HomeScreen() {
 
     lastSyncedStepsRef.current = roundedTotal;
     lastSyncedAtMsRef.current = nowMs;
-    await loadDashboard();
+    setLiveStepCount(roundedTotal);
+    void loadDashboard();
   };
 
   const startOfToday = () => {
@@ -473,6 +476,7 @@ export default function HomeScreen() {
       const pedometerResult = await readTodayPedometerSteps();
       if (stopped || pedometerResult.steps === null) return;
       baseline = pedometerResult.steps;
+      setLiveStepCount(baseline);
       await syncPedometerTotal(baseline, Date.now(), minStepDelta);
     };
 
@@ -490,11 +494,13 @@ export default function HomeScreen() {
       const initial = await Pedometer.getStepCountAsync(startOfToday(), new Date());
       if (stopped) return;
       baseline = Math.max(0, Math.round(initial?.steps ?? 0));
+      setLiveStepCount(baseline);
       await syncPedometerTotal(baseline, Date.now(), 1);
 
       subscription = Pedometer.watchStepCount((event: { steps?: number }) => {
         const eventSteps = Math.max(0, Math.round(event?.steps ?? 0));
         const total = baseline + eventSteps;
+        setLiveStepCount(total);
         void syncPedometerTotal(total, Date.now(), 15);
       });
 
@@ -517,7 +523,7 @@ export default function HomeScreen() {
       appStateSub?.remove();
       if (timer) clearInterval(timer);
     };
-  }, [dashboard, userData.stepTrackingPaused]);
+  }, [dashboard?.currentUser.id, userData.stepTrackingPaused]);
 
   const handleToggleStepTracking = async () => {
     if (stepTrackingLoading) return;
@@ -548,6 +554,7 @@ export default function HomeScreen() {
     }
     lastSyncedStepsRef.current = userData.dailyProgress.steps.current;
     lastSyncedAtMsRef.current = Date.now();
+    setLiveStepCount((prev) => Math.max(prev ?? 0, userData.dailyProgress.steps.current));
   }, [dashboard, userData.dailyProgress.steps.current]);
 
   useEffect(() => {
@@ -710,7 +717,7 @@ export default function HomeScreen() {
                 </View>
                 <AnimatedBar value={stepsPercent} color={COLORS.green} delay={200} height="h-2.5" />
                 <Text variant="muted" className="text-xs -mt-1">
-                  {userData.dailyProgress.steps.current.toLocaleString()} / {userData.dailyProgress.steps.goal.toLocaleString()}
+                  {displayedSteps.toLocaleString()} / {userData.dailyProgress.steps.goal.toLocaleString()}
                 </Text>
                 <View className="flex-row gap-2 mt-1">
                   <Button
