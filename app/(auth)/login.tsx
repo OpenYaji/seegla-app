@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useToast } from '@/components/ui/toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Mail, QrCode, ChevronLeft, CheckCircle2, User, Activity, Lock } from 'lucide-react-native';
@@ -50,6 +51,7 @@ type Step = 'login' | 'success' | 'profile' | 'health';
 // ─── Root screen ──────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
+  const toast = useToast();
   const [step, setStep]       = useState<Step>('login');
   const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
@@ -96,7 +98,7 @@ export default function LoginScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert('Login failed', 'Email or password is incorrect.');
+      toast.error('Login failed', 'Email or password is incorrect.');
       return;
     }
 
@@ -112,7 +114,7 @@ export default function LoginScreen() {
       if (alreadyOnboarded) {
         await setAuthenticated(true);
         setLoading(false);
-        Alert.alert('Welcome back', 'Signed in successfully.');
+        toast.success('Welcome back', 'Signed in successfully.');
         router.replace('/(tabs)');
         return;
       }
@@ -178,7 +180,7 @@ export default function LoginScreen() {
   async function handleConnectHealth() {
     const granted = await askStepPermission();
     if (!granted) {
-      Alert.alert('Permission required', 'You can continue with "Skip for now" and enable step tracking later.');
+      toast.info('Permission required', 'You can enable step tracking later from settings.');
       return;
     }
     await completeLogin();
