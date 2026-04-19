@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import {
   getHomeDashboard,
@@ -42,14 +42,17 @@ export function useHomeDashboard() {
   const [dashboard, setDashboard] = useState<HomeDashboardDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [waterLogged, setWaterLogged] = useState(0);
+  // Skeleton is only shown on the very first load, never on background re-fetches.
+  const hasLoadedOnce = useRef(false);
 
   const loadDashboard = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!hasLoadedOnce.current) setLoading(true);
       const res = await getHomeDashboard();
       setDashboard(res.data);
+      hasLoadedOnce.current = true;
     } catch {
-      setDashboard(null);
+      if (!hasLoadedOnce.current) setDashboard(null);
     } finally {
       setLoading(false);
     }
@@ -85,7 +88,14 @@ export function useHomeDashboard() {
       energyScore: answers[1] ?? 3,
       stressScore: answers[2] ?? 3,
     });
-    if (!res.error) await loadDashboard();
+    if (!res.error) {
+      // Flip the banner immediately — no skeleton, no wait.
+      setDashboard((prev) =>
+        prev ? { ...prev, checkIn: { ...prev.checkIn, completed: true } } : prev,
+      );
+      // Silently re-fetch to sync points, streak, and wellness score in the background.
+      void loadDashboard();
+    }
   };
 
   const handleLogout = async () => {
