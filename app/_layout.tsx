@@ -47,7 +47,6 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={theme}>
         <Stack>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)/splash-screen" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)/onboarding" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
