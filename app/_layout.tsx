@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { COLORS } from '@/lib/constants';
+import { ToastProvider } from '@/components/ui/toast';
 
 const SeeglaLight: Theme = {
   ...DefaultTheme,
@@ -46,17 +47,19 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={theme}>
+        <ToastProvider>
         <Stack>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)/splash-screen" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)/onboarding" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)/forgot-password" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
 
         <PortalHost />
         <StatusBar style="dark" translucent />
+        </ToastProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );

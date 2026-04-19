@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -10,9 +10,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useToast } from '@/components/ui/toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Mail, QrCode, ChevronLeft, CheckCircle2, User, Activity, Lock } from 'lucide-react-native';
+import { Mail, QrCode, ChevronLeft, CheckCircle2, User, Activity, Lock, Eye, EyeOff } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { Button } from '@/components/ui/button';
@@ -50,11 +51,17 @@ type Step = 'login' | 'success' | 'profile' | 'health';
 // ─── Root screen ──────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
+  const toast = useToast();
   const [step, setStep]       = useState<Step>('login');
   const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [finishingLogin, setFinishingLogin] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [failCount, setFailCount] = useState(0);
+  const isRequesting = useRef(false);
+  const cooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Profile fields
   const [name, setName]                   = useState('');
@@ -62,9 +69,37 @@ export default function LoginScreen() {
   const [avatarIdx, setAvatarIdx]         = useState(0);
   const [interests, setInterests]         = useState<string[]>([]);
 
-  const isValidEmail  = email.includes('@') && email.includes('.');
-  const canAttemptLogin = isValidEmail && password.length >= 6;
-  const canSaveProfile = name.trim().length > 0 && department.length > 0;
+  const isValidEmail    = email.includes('@') && email.includes('.');
+  const canAttemptLogin = isValidEmail && password.length >= 6 && cooldown === 0;
+  const canSaveProfile  = name.trim().length > 0 && department.length > 0;
+
+  function formatCooldown(secs: number) {
+    if (secs < 60) return `Try again in ${secs}s`;
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `Locked — ${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function startCooldown(seconds: number) {
+    if (cooldownTimer.current) clearInterval(cooldownTimer.current);
+    setCooldown(seconds);
+    cooldownTimer.current = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimer.current!);
+          cooldownTimer.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (cooldownTimer.current) clearInterval(cooldownTimer.current);
+    };
+  }, []);
 
   // Auto-fill name hint from email
   function extractNameFromEmail(e: string) {
@@ -87,7 +122,8 @@ export default function LoginScreen() {
   }
 
   async function handleVerify() {
-    if (!canAttemptLogin) return;
+    if (!canAttemptLogin || isRequesting.current) return;
+    isRequesting.current = true;
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
@@ -96,7 +132,17 @@ export default function LoginScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert('Login failed', 'Email or password is incorrect.');
+      isRequesting.current = false;
+      const nextFail = failCount + 1;
+      setFailCount(nextFail);
+      if (nextFail >= 10) {
+        toast.error('Account locked', 'Too many failed attempts. Try again in 5 minutes.');
+        startCooldown(300);
+      } else {
+        const remaining = 10 - nextFail;
+        toast.error('Login failed', `Wrong credentials. ${remaining} attempt${remaining === 1 ? '' : 's'} left.`);
+        startCooldown(5);
+      }
       return;
     }
 
@@ -112,7 +158,7 @@ export default function LoginScreen() {
       if (alreadyOnboarded) {
         await setAuthenticated(true);
         setLoading(false);
-        Alert.alert('Welcome back', 'Signed in successfully.');
+        toast.success('Welcome back', 'Signed in successfully.');
         router.replace('/(tabs)');
         return;
       }
@@ -126,7 +172,9 @@ export default function LoginScreen() {
       setName(extractNameFromEmail(email));
     }
 
+    setFailCount(0);
     setLoading(false);
+    isRequesting.current = false;
     setStep('success');
   }
 
@@ -178,7 +226,7 @@ export default function LoginScreen() {
   async function handleConnectHealth() {
     const granted = await askStepPermission();
     if (!granted) {
-      Alert.alert('Permission required', 'You can continue with "Skip for now" and enable step tracking later.');
+      toast.info('Permission required', 'You can enable step tracking later from settings.');
       return;
     }
     await completeLogin();
@@ -246,12 +294,17 @@ export default function LoginScreen() {
                   className="flex-1 py-4 text-sm text-foreground"
                   placeholder="Enter password"
                   placeholderTextColor="#9CA3AF"
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
                   value={password}
                   onChangeText={setPassword}
                 />
+                <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={8}>
+                  {showPassword
+                    ? <EyeOff size={18} color={COLORS.navy} />
+                    : <Eye size={18} color={COLORS.navy} />}
+                </Pressable>
               </View>
             </View>
 
@@ -262,8 +315,18 @@ export default function LoginScreen() {
               disabled={!canAttemptLogin || loading}
               onPress={handleVerify}
             >
-              <Text>{loading ? 'Signing in...' : 'Sign in'}</Text>
+              <Text>
+                {loading ? 'Signing in...' : cooldown > 0 ? formatCooldown(cooldown) : 'Sign in'}
+              </Text>
             </Button>
+
+            {/* Forgot password */}
+            <Pressable
+              className="items-end -mt-2"
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
+              <Text className="text-primary text-xs font-medium">Forgot password?</Text>
+            </Pressable>
 
             {/* Divider */}
             <View className="flex-row items-center gap-3">

@@ -1,0 +1,16 @@
+{
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit",
+    "source.sortMembers": "explicit"
+  },
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "tailwindCSS.emmetCompletions": true,
+  "tailwindCSS.experimental.classRegex": [
+    ["nativewind", "(?:'|\"|`)([^'\"`]*)(?:'|\"|`)"],
+    ["className=\\{?[\"']([^\"']+)[\"']\\}?", "[\"']([^\"']+)[\"']"]
+  ],
+  "tailwindCSS.validate": true,
+  "tailwindCSS.classAttributes": ["className", "tw", "class"]
+}
